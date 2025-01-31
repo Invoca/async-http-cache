@@ -1,33 +1,17 @@
 # frozen_string_literal: true
 
-# Copyright, 2020, by Samuel G. D. Williams. <http://www.codeotaku.com>
-# 
-# Permission is hereby granted, free of charge, to any person obtaining a copy
-# of this software and associated documentation files (the "Software"), to deal
-# in the Software without restriction, including without limitation the rights
-# to use, copy, modify, merge, publish, distribute, sublicense, and/or sell
-# copies of the Software, and to permit persons to whom the Software is
-# furnished to do so, subject to the following conditions:
-# 
-# The above copyright notice and this permission notice shall be included in
-# all copies or substantial portions of the Software.
-# 
-# THE SOFTWARE IS PROVIDED "AS IS", WITHOUT WARRANTY OF ANY KIND, EXPRESS OR
-# IMPLIED, INCLUDING BUT NOT LIMITED TO THE WARRANTIES OF MERCHANTABILITY,
-# FITNESS FOR A PARTICULAR PURPOSE AND NONINFRINGEMENT. IN NO EVENT SHALL THE
-# AUTHORS OR COPYRIGHT HOLDERS BE LIABLE FOR ANY CLAIM, DAMAGES OR OTHER
-# LIABILITY, WHETHER IN AN ACTION OF CONTRACT, TORT OR OTHERWISE, ARISING FROM,
-# OUT OF OR IN CONNECTION WITH THE SOFTWARE OR THE USE OR OTHER DEALINGS IN
-# THE SOFTWARE.
+# Released under the MIT License.
+# Copyright, 2020-2024, by Samuel Williams.
 
 module Async
 	module HTTP
 		module Cache
 			module Store
 				class Memory
-					def initialize(limit: 1024)
+					def initialize(limit: 1024, maximum_size: 1024*64, prune_interval: 60)
 						@index = {}
 						@limit = limit
+						@maximum_size = maximum_size
 						
 						@hit = 0
 						@miss = 0
@@ -35,7 +19,7 @@ module Async
 						
 						@gardener = Async(transient: true, annotation: self.class) do |task|
 							while true
-								task.sleep(60)
+								task.sleep(prune_interval)
 								
 								pruned = self.prune
 								@pruned += pruned
@@ -64,7 +48,7 @@ module Async
 					
 					attr :index
 					
-					IF_NONE_MATCH = 'if-none-match'
+					IF_NONE_MATCH = "if-none-match"
 					NOT_MODIFIED = ::Protocol::HTTP::Response[304]
 					
 					def lookup(key, request)
@@ -96,7 +80,7 @@ module Async
 					def insert(key, request, response)
 						if @index.size < @limit
 							length = response.body&.length
-							if length.nil? or length < 1024*64
+							if length.nil? or length < @maximum_size
 								@index[key] = response
 							end
 						end
